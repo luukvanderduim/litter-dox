@@ -58,11 +58,16 @@ struct DoxInfo {
 
 // A type to encapsulate the parsed relevant input.
 enum ParsedInput {
-    /// We cannot define outer macro attributes, these are unstable.
-    /// Though syn parses lists of items to `File` as well
-    File(syn::File),
-    Item(syn::Item),
-    Fragment(TokenStream2),
+    /// Represents a collection of items. While custom inner attributes (#![litter])
+    /// are unstable for proc-macros on stable Rust, syn::File is still used
+    /// to represent a sequence of multiple items or a virtual file buffer.
+    File(Box<syn::File>),
+
+    /// A single named Rust item (struct, fn, enum, etc.)
+    Item(Box<syn::Item>),
+
+    /// A code fragment that doesn't form a complete item (e.g., a block or expression).
+    Fragment(Box<TokenStream2>),
 }
 
 impl ParsedInput {
@@ -79,7 +84,7 @@ impl ParsedInput {
                 let file = syn::File {
                     shebang: None,
                     attrs: vec![],
-                    items: vec![i.clone()],
+                    items: vec![(**i).clone()],
                 };
                 prettyplease::unparse(&file)
             }
@@ -190,15 +195,15 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::parse2::<syn::Item>(item2.clone()),
     ) {
         // Name provided, and it's a full file
-        (Some(n), Ok(f), _) => (n, ParsedInput::File(f)),
+        (Some(n), Ok(f), _) => (n, ParsedInput::File(Box::new(f))),
 
         // Name provided, and it's an item
-        (Some(n), _, Ok(i)) => (n, ParsedInput::Item(i)),
+        (Some(n), _, Ok(i)) => (n, ParsedInput::Item(Box::new(i))),
 
         // No name, but we may have a named Item
         (None, _, Ok(i)) => {
             if let Some(ident) = get_item_ident(&i) {
-                (ident.to_string(), ParsedInput::Item(i))
+                (ident.to_string(), ParsedInput::Item(Box::new(i)))
             } else {
                 return comp_error(
                     &item2,
@@ -208,7 +213,7 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         // Name provided, but parsing as File/Item failed (it's a fragment)
-        (Some(n), _, _) => (n, ParsedInput::Fragment(item2.clone())),
+        (Some(n), _, _) => (n, ParsedInput::Fragment(Box::new(item2.clone()))),
 
         // Error Cases: No name provided for anonymous structures
         (None, Ok(_), _) => {
@@ -325,19 +330,18 @@ pub fn litter_anchors(item: TokenStream) -> TokenStream {
         for entry in entries.flatten() {
             let path = entry.path();
             // If the extension is .md
-            if path.extension().map_or(false, |e| e == "md") {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Some(caps) = back_link_re.captures(&content) {
-                        let doc_name = &caps["doc"];
-                        let anchor = &caps["anchor"];
+            if path.extension().is_some_and(|e| e == "md")
+                && let Ok(content) = std::fs::read_to_string(&path)
+                && let Some(caps) = back_link_re.captures(&content)
+            {
+                let doc_name = &caps["doc"];
+                let anchor = &caps["anchor"];
 
-                        let doc_path = PROJECT_ROOT.join(doc_name);
-                        doc_to_fragments
-                            .entry(doc_path)
-                            .or_default()
-                            .push(anchor.to_string());
-                    }
-                }
+                let doc_path = PROJECT_ROOT.join(doc_name);
+                doc_to_fragments
+                    .entry(doc_path)
+                    .or_default() // existing or a new &mut Vec<String> for anchors.
+                    .push(anchor.to_string());
             }
         }
     }
