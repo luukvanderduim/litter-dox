@@ -17,14 +17,3 @@ fn test_litter_file_exists() {
     let symlink = Path::new("litdox/my_test_fn.md");
     assert!(symlink.exists(), "The symlink should exist.");
 }
-
-#[litter(name = "fibonacci")]
-/// fibonacci for n
-fn fibonacci_n(n: u32) -> u32 {
-    if n <= 1 {
-        return n;
-    }
-    fibonacci_n(n - 1) + fibonacci_n(n - 2)
-}
-
-litter_dox::litter_anchors!();

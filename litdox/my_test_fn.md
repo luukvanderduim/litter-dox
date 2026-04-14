@@ -1,7 +1,5 @@
 <!-- litter-hash: 86cb024 -->
-<!-- litter-hash: 86cb024 -->
-
-        ### Source Fragment: `my_test_fn`
+### Source Fragment: `my_test_fn`
 
 ```rust
 fn my_test_fn() {

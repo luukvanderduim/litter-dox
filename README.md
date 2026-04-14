@@ -1,8 +1,14 @@
 # litter-dox
 
-Clean literate programming for Rust, without the odour.
+Clean [literate programming](https://en.wikipedia.org/wiki/Literate_programming) for Rust programmers, without the odour.
 
-Create simple relations between your code and your documentation.
+Create simple and convenient relations between documentation and code.
+
+## Demo
+
+In `/tests/demo.rs` <a id="fibonacci"></a>[a fibonacci function](litdox/fibonacci.md) is defined to compute the n-th number of the series.
+
+The link above will remain up-to-date, even if the code itself is updated.
 
 ## Usage
 
@@ -80,10 +86,6 @@ struct Bar;
 
 Users may insert an anchor manually where they insert a link in documentation,
 or let `litter_dox::litter_anchors!()` find links in documatation and automatically add anchors.
-
-## Example
-
-<a id="fibonacci"></a>[`Fibonacci_n` as found in the integration test](litdox/fibonacci.md)
 
 ## Acknowledgement
 

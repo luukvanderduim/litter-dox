@@ -1,10 +1,8 @@
-<!-- litter-hash: 67c7b61 -->
-<!-- litter-hash: 67c7b61 -->
-
-        ### Source Fragment: `fibonacci`
+<!-- litter-hash: 72ea20f -->
+### Source Fragment: `fibonacci`
 
 ```rust
-/// fibonacci for n
+/// Returns n-th Fibonacci number.
 fn fibonacci_n(n: u32) -> u32 {
     if n <= 1 {
         return n;
