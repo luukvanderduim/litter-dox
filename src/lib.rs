@@ -57,7 +57,7 @@ struct FragmentDir {
     /// Path to the directory where code fragment files are stored.
     dir_path: PathBuf,
 
-    // Regex escaped dir name.
+    /// Regex escaped dir name.
     escaped_dir_name: String,
 }
 
@@ -76,11 +76,8 @@ enum LitterFragment {
 impl LitterFragment {
     fn to_formatted_string(&self) -> String {
         match self {
-            // File obtained with inner attributes #![litter]
-            // Or in case of function-like macros, if a macro encapsulates multiple items
             LitterFragment::Module(f) => prettyplease::unparse(f),
 
-            // Named item (fn, struct, etc.)
             LitterFragment::Item(i) => {
                 // We wrap the item in a temporary File so prettyplease can handle it
                 let file = syn::File {
@@ -91,7 +88,6 @@ impl LitterFragment {
                 prettyplease::unparse(&file)
             }
 
-            // Raw fragment (blocks, closures, etc.)
             LitterFragment::Fragment(tokens) => {
                 // For raw fragments, we use the string representation.
                 // Since the TokenStream is "sealed" (braces included), it remains valid.
@@ -260,11 +256,8 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     if needs_write {
         // Create the content with the hash embedded as an HTML comment on the first line
-        let md_content = format!(
-            "<!-- litter-hash: {:07x} -->\n{}",
-            hash,
-            format_fragment_md(&formatted_fragment, &fragment_name, &return_doc_name, hash)
-        );
+        let md_content =
+            format_fragment_md(&formatted_fragment, &fragment_name, &return_doc_name, hash);
 
         let _ = std::fs::create_dir_all(&FRAGMENT_DIR.dir_path);
         let _ = std::fs::write(&fragment_file_path, md_content);
@@ -300,7 +293,7 @@ fn format_fragment_md(code: &str, name: &str, return_doc: &str, hash: u64) -> St
     // We place the link outside the code block to enable code copying,
     // and use the anchor (#name) to jump back to the exact location in the source doc.
     format!(
-        "{version_comment}
+        "{version_comment}\
         ### Source Fragment: `{name}`\n\n\
         ```rust\n\
         {code}\n\
