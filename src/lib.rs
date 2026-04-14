@@ -1,9 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
-use std::borrow::Cow;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::{
+    borrow::Cow,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 use syn::{Item, LitStr, Token, parse_macro_input};
 
 type Result<T> = std::result::Result<T, syn::Error>;
@@ -71,14 +73,13 @@ enum ParsedInput {
 }
 
 impl ParsedInput {
-    /// Format to Rust code string.
     fn to_formatted_string(&self) -> String {
         match self {
             // File obtained with inner attributes #![litter]
             // Or in case of function-like macros, if a macro encapsulates multiple items
             ParsedInput::File(f) => prettyplease::unparse(f),
 
-            // Case 2: Named item (fn, struct, etc.)
+            // Named item (fn, struct, etc.)
             ParsedInput::Item(i) => {
                 // We wrap the item in a temporary File so prettyplease can handle it
                 let file = syn::File {
@@ -89,12 +90,22 @@ impl ParsedInput {
                 prettyplease::unparse(&file)
             }
 
-            // Case 3: Raw fragment (blocks, closures, etc.)
+            // Raw fragment (blocks, closures, etc.)
             ParsedInput::Fragment(tokens) => {
                 // For raw fragments, we use the string representation.
                 // Since the TokenStream is "sealed" (braces included), it remains valid.
                 tokens.to_string()
             }
+        }
+    }
+}
+
+impl Hash for ParsedInput {
+    fn hash<F: Hasher>(&self, state: &mut F) {
+        match self {
+            ParsedInput::File(f) => f.hash(state),
+            ParsedInput::Item(i) => i.hash(state),
+            ParsedInput::Fragment(tokens) => tokens.to_string().hash(state),
         }
     }
 }
@@ -169,8 +180,8 @@ impl syn::parse::Parse for ParsedAttributes {
 
 #[proc_macro_attribute]
 pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Rustc provides `TokenStream` which becomes available when the library is set to be of proc-macro type.
-    // That type, however is an opaque type, `proc_macro2::TokenStream` is a more ergonomic and malleable type.
+    // Rustc provides `proc-macro::TokenStream` which becomes available when the library is set to be of proc-macro type.
+    // `proc-macro::TokenStream` however is an opaque type, `proc_macro2::TokenStream` is a more ergonomic and malleable rendition.
     let item2 = TokenStream2::from(item.clone());
 
     // Obtain user supplied args, if any.
@@ -194,13 +205,13 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::parse2::<syn::File>(item2.clone()),
         syn::parse2::<syn::Item>(item2.clone()),
     ) {
-        // Name provided, and it's a full file
+        // Name provided, and it's a full file / capture of several items.
         (Some(n), Ok(f), _) => (n, ParsedInput::File(Box::new(f))),
 
         // Name provided, and it's an item
         (Some(n), _, Ok(i)) => (n, ParsedInput::Item(Box::new(i))),
 
-        // No name, but we may have a named Item
+        // No name, but we may have a named `Item`
         (None, _, Ok(i)) => {
             if let Some(ident) = get_item_ident(&i) {
                 (ident.to_string(), ParsedInput::Item(Box::new(i)))
@@ -227,54 +238,34 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let pretty_code = parsed_input.to_formatted_string();
-
-    // The fragment file name will comprise of name and short hash, so let's compute a hash.
+    // The fragment file will contain a short hash to version the fragment.
     let mut hasher = DefaultHasher::new();
-    pretty_code.hash(&mut hasher);
+    parsed_input.hash(&mut hasher);
     // Mask against 28 LSBs, 4 bits equals a hex digit, thus 7 hex digits
     let hash = hasher.finish() & 0x0FFF_FFFF;
 
-    let file_name = format!("{}_{:07x}.md", fragment_name, hash);
-    let symlink_name = format!("{}.md", fragment_name);
+    // Format after hashing to avoid a hash dependency on `prettyplease` dependency
+    // so we can update `prettyplease` without falsely invalidating fragment hashes.
+    let formatted_fragment = parsed_input.to_formatted_string();
+    let fragment_file_name = format!("{}.md", fragment_name);
+    let fragment_file_path = std::path::PathBuf::from(&DOX_INFO.path).join(&fragment_file_name);
 
-    let path = std::path::PathBuf::from(&DOX_INFO.path).join(&file_name);
-    let symlink_path = std::path::PathBuf::from(&DOX_INFO.path).join(&symlink_name);
+    let needs_write = if let Ok(existing) = std::fs::read_to_string(&fragment_file_path) {
+        !existing.contains(&format!("<!-- litter-hash: {:07x} -->", hash))
+    } else {
+        true // File doesn't exist
+    };
 
-    // Is the symlink already up-to-date?
-    let symlink_up_to_date = std::fs::read_link(&symlink_path)
-        .map(|target| target == std::path::Path::new(&file_name))
-        .unwrap_or(false);
+    if needs_write {
+        // Create the content with the hash embedded as an HTML comment on the first line
+        let md_content = format!(
+            "<!-- litter-hash: {:07x} -->\n{}",
+            hash,
+            format_fragment_md(&formatted_fragment, &fragment_name, &return_doc_name, hash)
+        );
 
-    if !symlink_up_to_date {
-        // Create fragment md
-        if !path.exists() {
-            let md = format_fragment_md(&pretty_code, &fragment_name, &return_doc_name);
-            std::fs::create_dir_all(&DOX_INFO.path).ok();
-            std::fs::write(&path, md).ok();
-        }
-
-        // Delete old symlink target
-        if let Ok(old_target_name) = std::fs::read_link(&symlink_path) {
-            let old_target_path = DOX_INFO.path.join(old_target_name);
-
-            // `symlink_up_to_date` is false if:
-            // - the old target exists and is not the new target
-            // - if the symlink was manually changed
-            // - on first run, symlink does not exist
-            if old_target_path.exists() {
-                let _ = std::fs::remove_file(old_target_path);
-            }
-        }
-
-        // Refresh the symlink:
-        let _ = std::fs::remove_file(&symlink_path);
-
-        #[cfg(unix)]
-        let _ = std::os::unix::fs::symlink(&file_name, &symlink_path);
-
-        #[cfg(windows)]
-        let _ = std::os::windows::fs::symlink_file(&file_name, &symlink_path);
+        let _ = std::fs::create_dir_all(&DOX_INFO.path);
+        let _ = std::fs::write(&fragment_file_path, md_content);
     }
 
     item
@@ -301,11 +292,14 @@ fn comp_error(item: &TokenStream2, err: &str) -> TokenStream {
 }
 
 /// A helper to standardize formatted Markdown output.
-fn format_fragment_md(code: &str, name: &str, return_doc: &str) -> String {
+fn format_fragment_md(code: &str, name: &str, return_doc: &str, hash: u64) -> String {
+    let version_comment = format!("<!-- litter-hash: {:07x} -->\n", hash);
+
     // We place the link outside the code block to enable code copying,
     // and use the anchor (#name) to jump back to the exact location in the source doc.
     format!(
-        "### Source Fragment: `{name}`\n\n\
+        "{version_comment}
+        ### Source Fragment: `{name}`\n\n\
         ```rust\n\
         {code}\n\
         ```\n\n\
