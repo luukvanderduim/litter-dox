@@ -26,7 +26,7 @@ static README: LazyLock<Option<String>> = LazyLock::new(|| {
 });
 
 /// This is set to the `LITTER_DOX_PATH` env variable, `"litdox"` or PROJECT_ROOT in this order.
-static DOX_INFO: LazyLock<DoxInfo> = LazyLock::new(|| {
+static FRAGMENT_DIR: LazyLock<FragmentDir> = LazyLock::new(|| {
     let path = std::env::var("LITTER_DOX_PATH")
         .ok() // -> Option
         .map(PathBuf::from)
@@ -40,47 +40,48 @@ static DOX_INFO: LazyLock<DoxInfo> = LazyLock::new(|| {
             }
         });
 
-    let folder_name = path
+    let dir_name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .expect("path always resolves to path");
 
-    DoxInfo {
-        path,
-        escaped_folder: regex::escape(&folder_name),
+    FragmentDir {
+        dir_path: path,
+        escaped_dir_name: regex::escape(&dir_name),
     }
 });
 
-/// Path to the directory where code fragment files are stored and the escaped folder name for use in regex patterns.
-/// This is set to the `LITTER_DOX_PATH` environment variable, or `"litdox"` if that is not set and if those two fail, the current directory `"."` is used.
-struct DoxInfo {
-    path: PathBuf,
-    escaped_folder: String,
+/// The directory where code fragment files are stored and the escaped folder name for use in regex patterns.
+/// This is set to the `LITTER_DOX_PATH` env variable, or `"litdox"` if that is not set or if all else fails PWD `"."` is used.
+struct FragmentDir {
+    /// Path to the directory where code fragment files are stored.
+    dir_path: PathBuf,
+
+    // Regex escaped dir name.
+    escaped_dir_name: String,
 }
 
 // A type to encapsulate the parsed relevant input.
-enum ParsedInput {
-    /// Represents a collection of items. While custom inner attributes (#![litter])
-    /// are unstable for proc-macros on stable Rust, syn::File is still used
-    /// to represent a sequence of multiple items or a virtual file buffer.
-    File(Box<syn::File>),
+enum LitterFragment {
+    /// Multiple items or a whole module structure.
+    Module(Box<syn::File>),
 
     /// A single named Rust item (struct, fn, enum, etc.)
     Item(Box<syn::Item>),
 
-    /// A code fragment that doesn't form a complete item (e.g., a block or expression).
+    /// Raw tokens for blocks or expressions.
     Fragment(Box<TokenStream2>),
 }
 
-impl ParsedInput {
+impl LitterFragment {
     fn to_formatted_string(&self) -> String {
         match self {
             // File obtained with inner attributes #![litter]
             // Or in case of function-like macros, if a macro encapsulates multiple items
-            ParsedInput::File(f) => prettyplease::unparse(f),
+            LitterFragment::Module(f) => prettyplease::unparse(f),
 
             // Named item (fn, struct, etc.)
-            ParsedInput::Item(i) => {
+            LitterFragment::Item(i) => {
                 // We wrap the item in a temporary File so prettyplease can handle it
                 let file = syn::File {
                     shebang: None,
@@ -91,7 +92,7 @@ impl ParsedInput {
             }
 
             // Raw fragment (blocks, closures, etc.)
-            ParsedInput::Fragment(tokens) => {
+            LitterFragment::Fragment(tokens) => {
                 // For raw fragments, we use the string representation.
                 // Since the TokenStream is "sealed" (braces included), it remains valid.
                 tokens.to_string()
@@ -100,12 +101,12 @@ impl ParsedInput {
     }
 }
 
-impl Hash for ParsedInput {
+impl Hash for LitterFragment {
     fn hash<F: Hasher>(&self, state: &mut F) {
         match self {
-            ParsedInput::File(f) => f.hash(state),
-            ParsedInput::Item(i) => i.hash(state),
-            ParsedInput::Fragment(tokens) => tokens.to_string().hash(state),
+            LitterFragment::Module(f) => f.hash(state),
+            LitterFragment::Item(i) => i.hash(state),
+            LitterFragment::Fragment(tokens) => tokens.to_string().hash(state),
         }
     }
 }
@@ -206,15 +207,15 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::parse2::<syn::Item>(item2.clone()),
     ) {
         // Name provided, and it's a full file / capture of several items.
-        (Some(n), Ok(f), _) => (n, ParsedInput::File(Box::new(f))),
+        (Some(n), Ok(f), _) => (n, LitterFragment::Module(Box::new(f))),
 
         // Name provided, and it's an item
-        (Some(n), _, Ok(i)) => (n, ParsedInput::Item(Box::new(i))),
+        (Some(n), _, Ok(i)) => (n, LitterFragment::Item(Box::new(i))),
 
         // No name, but we may have a named `Item`
         (None, _, Ok(i)) => {
             if let Some(ident) = get_item_ident(&i) {
-                (ident.to_string(), ParsedInput::Item(Box::new(i)))
+                (ident.to_string(), LitterFragment::Item(Box::new(i)))
             } else {
                 return comp_error(
                     &item2,
@@ -224,7 +225,7 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         // Name provided, but parsing as File/Item failed (it's a fragment)
-        (Some(n), _, _) => (n, ParsedInput::Fragment(Box::new(item2.clone()))),
+        (Some(n), _, _) => (n, LitterFragment::Fragment(Box::new(item2.clone()))),
 
         // Error Cases: No name provided for anonymous structures
         (None, Ok(_), _) => {
@@ -248,7 +249,8 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
     // so we can update `prettyplease` without falsely invalidating fragment hashes.
     let formatted_fragment = parsed_input.to_formatted_string();
     let fragment_file_name = format!("{}.md", fragment_name);
-    let fragment_file_path = std::path::PathBuf::from(&DOX_INFO.path).join(&fragment_file_name);
+    let fragment_file_path =
+        std::path::PathBuf::from(&FRAGMENT_DIR.dir_path).join(&fragment_file_name);
 
     let needs_write = if let Ok(existing) = std::fs::read_to_string(&fragment_file_path) {
         !existing.contains(&format!("<!-- litter-hash: {:07x} -->", hash))
@@ -264,7 +266,7 @@ pub fn litter(attr: TokenStream, item: TokenStream) -> TokenStream {
             format_fragment_md(&formatted_fragment, &fragment_name, &return_doc_name, hash)
         );
 
-        let _ = std::fs::create_dir_all(&DOX_INFO.path);
+        let _ = std::fs::create_dir_all(&FRAGMENT_DIR.dir_path);
         let _ = std::fs::write(&fragment_file_path, md_content);
     }
 
@@ -320,7 +322,7 @@ pub fn litter_anchors(item: TokenStream) -> TokenStream {
     )
     .expect("back-link regex known to be valid");
 
-    if let Ok(entries) = std::fs::read_dir(&DOX_INFO.path) {
+    if let Ok(entries) = std::fs::read_dir(&FRAGMENT_DIR.dir_path) {
         for entry in entries.flatten() {
             let path = entry.path();
             // If the extension is .md
@@ -344,7 +346,7 @@ pub fn litter_anchors(item: TokenStream) -> TokenStream {
     // (...) a group, ?P<text> named "text", +. matches one or more characters, ? indicates laxy matching.
     let link_re = regex::Regex::new(&format!(
         r"\[(?P<text>.+?)\]\((?:\./)?(?P<path>{}/(?P<name>[^/)]+)\.md)\)",
-        DOX_INFO.escaped_folder
+        FRAGMENT_DIR.escaped_dir_name
     ))
     .expect("link regex is a valid regex");
 
