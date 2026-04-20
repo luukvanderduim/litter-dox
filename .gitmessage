@@ -1,0 +1,42 @@
+# <type>(<scope>): <subject>                  -->|
+#                                            (50 chars)
+#
+# <body - explain what and why, not how>                            -->|
+#                                                                 (72 chars)
+#
+# <footer - breaking changes, issue references>
+#
+
+
+# Conventional commit message guide for atspi:
+
+# TYPES ───────────────────────────────────────────────────────────────────────
+# feat      ✨ New feature or enhancement
+# fix       🐛 Bug fix
+# docs      📚 Documentation changes
+# style     💎 Code style changes (formatting, semicolons, etc.)
+# refactor  ♻️  Code refactoring without functional changes
+# perf      ⚡ Performance improvements
+# test      🧪 Adding or updating tests
+# build     🏗️  Build system or dependency changes
+# ci        👷 CI/CD configuration changes
+# chore     🔧 Maintenance tasks, tooling changes
+# revert    ⏪ Reverting previous changes
+
+# SCOPES [optional] ---------──────────────────────────────────────────────────
+# all       🌐 Workspace-wide changes
+
+# EXAMPLES ────────────────────────────────────────────────────────────────────
+# feat(scope): add support for new feature
+# fix(scope): handle connection timeout gracefully
+# docs(scope): update README with installation instructions
+
+# WRITING TIPS ────────────────────────────────────────────────────────────────
+# • Use imperative mood: "add" not "added" or "adds"
+# • Keep subject line under 50 characters
+# • Wrap body lines at 72 characters
+# • Separate subject from body with blank line
+# • Use body to explain WHAT and WHY, not HOW
+# • Reference issues: "Fixes #123", "Closes #456", "Resolves #789"
+# • Breaking changes: Add "!" after type/scope OR "BREAKING CHANGE:" footer
+# • Co-authors: "Co-authored-by: Name <email@example.com>"
