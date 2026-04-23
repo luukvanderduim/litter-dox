@@ -84,19 +84,30 @@ struct Bar;
 
 #### Anchors
 
-Users may insert an anchor manually where they insert a link in documentation,
-or let `litter_dox::litter_anchors!()` find links in documatation and automatically add anchors.
+Users may insert an anchor manually `<a id="fragment-name-here"></a>` wherever they find it convenient to link to.
+or allow <a id="litter_anchors"></a>[`litter_dox::litter_anchors!()`](litdox/litter_anchors.md) find links in documatation and automatically add a matching anchor before each link.
+
 
 ## Acknowledgement
 
-litter-dox is inspired by [Johan Hidding](<https://www.github.com/jhidding>)'s continuous advocacy for literate programming and his work on [entangled](<https://entangled.github.io/>).
+litter-dox is provoked by [Johan Hidding](<https://www.github.com/jhidding>)'s continuous advocacy for literate programming with [entangled](<https://entangled.github.io/>).
 
-If you wish to employ literate programming for anything remotely serious, I encourage you to look into `entangled` thinking about this crate.
+If you wish to engage with literate programming for anything remotely serious, you are encouraged to look into `entangled` before considering this crate.
 
 ## LLM use
 
-Gemini Flash 3 helped as teacher, sparring partner and knowledge base.
+Gemini Flash 3 was useful as teacher, sparring partner and knowledge base.
 
 ## License
 
-MIT
+Licensed under either of
+
+    Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+
+    MIT license (LICENSE-MIT or http://opensource.org/licenses/MIT)
+
+at your option.
+
+## Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

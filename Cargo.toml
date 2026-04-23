@@ -2,8 +2,15 @@
 name = "litter-dox"
 version = "0.1.0"
 authors = ["Luuk van der Duim <luukvanderduim@gmail.com>"]
+repository = "https://github.com/luukvanderduim/litter-dox"
+description = "Convenient literate programming for Rust programmers."
+readme = "README.md"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
+minimum-rust-version = "1.88.0"
+keywords = ["documentation", "literate-programming", "proc-macro", "markdown"]
+categories = ["development-tools", "rust-patterns"]
+include = ["src/**/*", "LICENSE-*", "README.md", "Cargo.toml"]
 
 [lib]
 proc-macro = true
