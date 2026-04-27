@@ -1,4 +1,4 @@
-<!-- litter-hash: d27d847 -->
+<!-- litter-hash: 72ea20f -->
 ### Source Fragment: `fibonacci`
 
 ```rust
