@@ -1,4 +1,7 @@
-# litter-dox
+<div align="center">
+  <h1>litter-dox</h1>
+  <p>Clean literate programming for Rust programmers, without the odour.</p>
+</div>
 
 Clean [literate programming](https://en.wikipedia.org/wiki/Literate_programming) for Rust programmers, without the odour.
 
